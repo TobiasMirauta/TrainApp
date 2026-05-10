@@ -97,20 +97,7 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<?> searchTrainConnections(
-            @RequestParam("from") String from,
-            @RequestParam("to") String to) {
-        try {
-            System.out.println("Căutare începută pentru: " + from + " -> " + to);
 
-            List<JourneyResponse> results = adminService.searchJourneys(from, to);
-            return ResponseEntity.ok(results);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
-        }
-    }
     @PatchMapping("/schedules/{id}/delay")
     public ResponseEntity<?> addDelay(
             @PathVariable("id") String scheduleId,
