@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Siemens Train App - Panou Control Complet</title>
+    <style>
+        :root { --primary: #005f73; --sec: #ee9b00; --bg: #e9ecef; --text: #212529; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; color: var(--text); }
+        .sidebar { width: 380px; background: white; border-right: 1px solid #dee2e6; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .main { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .card { background: white; border-radius: 10px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid var(--primary); }
+        .card.admin { border-left-color: #ae2012; }
+        .card.booking { border-left-color: var(--sec); }
+        h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ced4da; box-sizing: border-box; }
+        button { background: var(--primary); color: white; font-weight: bold; cursor: pointer; border: none; transition: 0.3s; }
+        button:hover { opacity: 0.8; }
+        .btn-booking { background: var(--sec); }
+        .btn-view { background: #94d2bd; color: #001219; }
+        #networkLog { flex: 1; background: #001219; color: #94d2bd; padding: 15px; border-radius: 8px; font-family: monospace; overflow-y: auto; font-size: 13px; }
+        .journey-box { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin-top: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>🛠️ Admin & Rezervări</h2>
+
+    <div class="card admin">
+        <h3>⚙️ Gestiune Trenuri</h3>
+        <input type="text" id="admSchId" placeholder="ID Tren (ex: IR-101)">
+        <input type="number" id="admRtId" placeholder="ID Rută">
+        <input type="number" id="admSeats" placeholder="Capacitate Locuri">
+        <button onclick="send('routing', '/admin/schedules', {scheduleId: val('admSchId'), routeId: num('admRtId'), totalSeats: num('admSeats'), departureTime: '2026-05-10T10:00:00', arrivalTime: '2026-05-10T14:00:00'})">Creează Tren</button>
+    </div>
+
+    <div class="card admin">
+        <h3>📊 Vizualizare Rezervări</h3>
+        <input type="text" id="viewTrainId" placeholder="ID Tren">
+        <button class="btn-view" onclick="fetchBookings()">Arată Rezervări</button>
+    </div>
+
+    <div class="card admin">
+        <h3>⚠️ Notificare Întârziere</h3>
+        <input type="text" id="delayTrainId" placeholder="ID Tren">
+        <input type="number" id="delayMin" placeholder="Minute Întârziere">
+        <button style="background: #bb3e03;" onclick="send('routing', '/admin/schedules/'+val('delayTrainId')+'/delay?delayMinutes='+num('delayMin'), {}, 'PATCH')">Setează Întârziere</button>
+    </div>
+
+    <div class="card booking">
+        <h3>🎫 Rezervare Bilet</h3>
+        <input type="email" id="bkEmail" placeholder="Email Client">
+        <input type="text" id="bkSchId" placeholder="ID Tren">
+        <input type="number" id="bkQty" value="1" placeholder="Nr. Bilete">
+        <button class="btn-booking" onclick="send('booking', '/bookings', {customerEmail: val('bkEmail'), scheduleId: val('bkSchId'), quantity: num('bkQty')})">Rezervă Bilete</button>
+    </div>
+</div>
+
+<div class="main">
+    <div class="card">
+        <h2>🔍 Căutare Călătorie (Direct / Escala)</h2>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="fromSt" placeholder="Plecări din (ex: Cluj)">
+            <input type="text" id="toSt" placeholder="Sosit la (ex: Bucuresti)">
+            <button onclick="searchJourneys()">Caută Opțiuni</button>
+        </div>
+        <div id="resultsArea"></div>
+    </div>
+
+    <div id="networkLog">--- Log-uri Sistem ---</div>
+</div>
+
+<script>
+    const API = { routing: "http://localhost:8080/api/v1", booking: "http://localhost:8081/api/v1" };
+    const val = id => document.getElementById(id).value;
+    const num = id => parseInt(val(id));
+
+    function log(msg, isErr = false) {
+        const div = document.createElement('div');
+        div.style.color = isErr ? "#ef476f" : "#06d6a0";
+        div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        document.getElementById('networkLog').prepend(div);
+    }
+
+    async function send(srv, path, body, method = 'POST') {
+        try {
+            const res = await fetch(API[srv] + path, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: method !== 'GET' && method !== 'DELETE' ? JSON.stringify(body) : null
+            });
+            const data = await res.json();
+            log(`${method} ${path} -> ${res.ok ? 'SUCCES' : 'EROARE: ' + JSON.stringify(data)}`, !res.ok);
+        } catch (e) { log("Eroare conexiune: " + e.message, true); }
+    }
+
+    async function searchJourneys() {
+        const resArea = document.getElementById('resultsArea');
+        resArea.innerHTML = "Se caută...";
+        try {
+            const res = await fetch(`${API.routing}/search?from=${val('fromSt')}&to=${val('toSt')}`);
+            if (!res.ok) {
+                resArea.innerHTML = `<b style="color:red">${await res.text()}</b>`;
+                return;
+            }
+            const journeys = await res.json();
+            resArea.innerHTML = journeys.map(j => `
+                <div class="journey-box">
+                    <b>Tip: ${j.journeyType}</b><br>
+                    ${j.legs.map(l => `🚂 Tren: ${l.trainId} | ${l.source} (${new Date(l.departureTime).toLocaleTimeString()}) → ${l.destination} (${new Date(l.arrivalTime).toLocaleTimeString()})`).join('<br>')}
+                </div>
+            `).join('');
+        } catch (e) { resArea.innerHTML = "Eroare la căutare."; }
+    }
+
+    async function fetchBookings() {
+        log("Se preiau rezervările pentru trenul " + val('viewTrainId'));
+        await send('booking', '/bookings/train/' + val('viewTrainId'), {}, 'GET');
+    }
+</script>
+</body>
+</html>
