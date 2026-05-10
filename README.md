@@ -25,101 +25,51 @@ Sistemul utilizeaza o abordare adaptata a algoritmului lui Dijkstra pentru a gas
 
 Dezvoltarea a respectat principiile programarii orientate pe obiecte:
 
-* Single Responsibility Principle (SRP): Clasele au responsabilitati bine definite (ex. `AdminService` se ocupa exclusiv de logica de business, `SearchController` de expunerea rutelor HTTP).
-* Information Expert (GRASP): Logica de gestionare a locurilor disponibile este responsabilitatea entitatii `TrainInventory`, care detine datele necesare pentru validare.
+* Single Responsibility Principle (SRP): Clasele au responsabilitati bine definite (ex. AdminService se ocupa exclusiv de logica de business, SearchController de expunerea rutelor HTTP).
+* Information Expert (GRASP): Logica de gestionare a locurilor disponibile este responsabilitatea entitatii TrainInventory, care detine datele necesare pentru validare.
 * Low Coupling: Microserviciile sunt decuplate, comunicand exclusiv prin interfete REST (Feign) si mesagerie asincrona (RabbitMQ).
 
 ## Instructiuni de Testare si Exemple (Input/Output)
 
-Aceste exemple ilustreaza fluxul de testare al aplicatiei utilizand Postman. Toate request-urile ce implica date temporale utilizeaza formatul ISO-8601 (`yyyy-MM-dd'T'HH:mm:ss`).
+Aceste exemple ilustreaza fluxul de testare al aplicatiei utilizand Postman sau interfata grafica integrata. Toate request-urile ce implica date temporale utilizeaza formatul ISO-8601 (yyyy-MM-dd'T'HH:mm:ss).
 
 ### Faza 1: Crearea Datelor (Rol: Administrator)
 
 1. Adaugare Statii
-* URL: `POST http://localhost:8080/api/v1/admin/stations`
-* Input:
-```json
-{"name": "Cluj"}
-```
-* Output Asteptat: `200 OK` si detaliile statiei create.
+* URL: POST http://localhost:8080/api/v1/admin/stations
+* Input: {"name": "Cluj"}
+* Output Asteptat: 200 OK si detaliile statiei create.
 
 2. Adaugare Rute
-* URL: `POST http://localhost:8080/api/v1/admin/routes`
-* Input (Cluj -> Brasov):
-```json
-{"sourceStationId": 1, "destinationStationId": 2, "durationMinutes": 120}
-```
-* Output Asteptat: `200 OK` si detaliile rutei create.
-
-3. Adaugare Orare Tren
-* URL: `POST http://localhost:8080/api/v1/admin/schedules`
-* Input (IR-100):
-```json
-{
-  "scheduleId": "IR-100",
-  "routeId": 1,
-  "departureTime": "2026-05-15T08:00:00",
-  "arrivalTime": "2026-05-15T10:00:00",
-  "totalSeats": 50
-}
-```
-* Output Asteptat: `200 OK` si detaliile programului creat.
+* URL: POST http://localhost:8080/api/v1/admin/routes
+* Input (Cluj -> Brasov): {"sourceStationId": 1, "destinationStationId": 2, "durationMinutes": 120}
+* Output Asteptat: 200 OK si detaliile rutei create.
 
 ### Faza 2: Functionalitati Publice (Rol: Client)
 
 1. Cautarea unei calatorii cu escala
-* URL: `GET http://localhost:8080/api/v1/search?from=Cluj&to=Bucuresti`
-* Output Asteptat (`200 OK`):
-```json
-[
-  {
-    "journeyType": "ESCALA",
-    "legs": [
-      {
-        "trainId": "IR-100",
-        "source": "Cluj",
-        "destination": "Brasov",
-        "departureTime": "2026-05-15T08:00:00",
-        "arrivalTime": "2026-05-15T10:00:00"
-      },
-      {
-        "trainId": "IR-200",
-        "source": "Brasov",
-        "destination": "Bucuresti",
-        "departureTime": "2026-05-15T11:00:00",
-        "arrivalTime": "2026-05-15T13:30:00"
-      }
-    ]
-  }
-]
-```
+* URL: GET http://localhost:8080/api/v1/search?from=Cluj&to=Bucuresti
+* Output Asteptat (200 OK): Un obiect de tip ESCALA continand cele doua segmente de drum (legs) formatate corespunzator.
 
 2. Rezervarea unui bilet (Anti-Overbooking)
-* URL: `POST http://localhost:8081/api/v1/bookings`
-* Input:
-```json
-{
-  "customerEmail": "tobias.mirauta@student.utcn.ro",
-  "scheduleId": "IR-100",
-  "quantity": 1
-}
-```
-* Output Asteptat: `200 OK`. In terminalul Notification Service se va inregistra confirmarea preluata prin RabbitMQ. Daca parametrul `quantity` depaseste locurile disponibile, se returneaza o eroare relevanta.
+* URL: POST http://localhost:8081/api/v1/bookings
+* Input: {"customerEmail": "student@example.com", "scheduleId": "IR-100", "quantity": 1}
+* Output Asteptat: 200 OK. Notificarea de confirmare este procesata asincron.
 
-### Faza 3: Management Avansat (Rol: Administrator)
+## Perspective de Viitor (Future Work)
 
-1. Declararea intarzierilor si alertarea clientilor
-* URL: `PATCH http://localhost:8080/api/v1/admin/schedules/IR-100/delay?minutes=45`
-* Output Asteptat: `200 OK`. Routing Service va interoga Booking Service, va prelua adresele de email si va publica un mesaj in RabbitMQ. Terminalul Notification Service va afisa alerta trimisa.
+Daca as fi avut mai mult timp la dispozitie, as fi extins proiectul prin urmatoarele directii:
 
-2. Vizualizarea rezervarilor per tren
-* URL: `GET http://localhost:8081/api/v1/bookings/train/IR-100`
-* Output Asteptat: `200 OK` si o lista JSON continand pasagerii ce au rezervat bilete pentru cursa `IR-100`.
+1. Modernizarea Interfetei Grafice: Desi sistemul dispune de un modul frontend functional bazat pe HTML/JS, o etapa ulterioara ar presupune migrarea catre un framework modern de tip Single Page Application (React sau Angular). Acest lucru ar permite o gestionare mai dinamica a starii si o experienta de utilizare mult mai fluida.
+2. Serviciu de Notificari Real: Inlocuirea simularilor din Notification Service cu o integrare reala cu un server SMTP sau un API de mailing (precum SendGrid), pentru a livra email-uri veritabile in inbox-ul clientilor.
+3. Securitate Avansata: Implementarea Spring Security cu protocolul OAuth2 sau JWT pentru a securiza rutele administrative si pentru a permite utilizatorilor sa isi creeze conturi si sa isi acceseze istoricul rezervarilor.
+4. Optimizarea Algoritmului de Rute: Desi implementarea actuala este stabila, am explorat teoretic posibilitatea de a adauga filtre avansate (ex. cautarea celei mai ieftine rute, a celei mai rapide sau a celei cu numar minim de schimbari).
+5. Observabilitate: Integrarea unor instrumente de monitorizare precum Prometheus si Grafana pentru a urmari performanta fiecarui microserviciu si sanatatea cozilor de mesaje din RabbitMQ in timp real.
 
 ## Tehnologii Utilizate
 * Java 17 & Spring Boot 3
-* Spring Cloud OpenFeign
-* RabbitMQ
-* PostgreSQL
-* Docker & Docker Compose
-* Jackson Datatype JSR310
+* Spring Cloud OpenFeign (Comunicare Sincrona)
+* RabbitMQ (Comunicare Asincrona)
+* PostgreSQL (Persistenta)
+* Docker & Docker Compose (Containerizare)
+* Jackson Datatype JSR310 (Formatare date)
